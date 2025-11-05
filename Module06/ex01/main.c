@@ -139,7 +139,7 @@ void i2c_read(void)
 	//read it
 	i2c_start();
 	i2c_SLA_R();
-	for (uint8_t i = 0; i < 5; i++)
+	for (uint8_t i = 0; i < 6; i++)
 		print_hex_value(i2c_read_TWDR(ACK));
 	print_hex_value(i2c_read_TWDR(NACK));
 	uart_print("\n\r");
@@ -205,7 +205,7 @@ void main()
 	i2c_start();
 	i2c_SLA_R();
 	for (uint8_t i = 0; i < 5; i++)
-	i2c_read();
+		i2c_read();
 	i2c_read_nack();
 	i2c_stop();
 }
