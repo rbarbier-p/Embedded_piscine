@@ -134,7 +134,7 @@ void i2c_read(void)
 		i2c_SLA_R();
 		status = i2c_read_TWDR(NACK);
 		i2c_stop();
-	} while (status & 0x01000000 == 1);
+	} while (status & 0x10000000 == 1);
 
 	//read it
 	i2c_start();

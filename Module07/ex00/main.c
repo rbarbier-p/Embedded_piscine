@@ -16,25 +16,24 @@ void uart_init(void)
 	UCSR0C |= (1 << UCSZ01) | (1 << UCSZ00);
 }
 
-void uart_print(char* str)
+void uart_tx(char c)
 {
-    for (uint8_t i = 0; str[i] != '\0'; i++) {
-		while (!(UCSR0A & (1 << UDRE0)));
-    		UDR0 = str[i];
-	}
+	while (!(UCSR0A & (1 << UDRE0)));
+		UDR0 = c;
 }
 
-void print_hex_value(char c)
+void uart_print(char* str)
 {
-	static char hex_str[4];
+    for (uint8_t i = 0; str[i] != '\0'; i++)
+		uart_tx(str[i]);
+}
+
+void print_hex_value(uint16_t c, uint8_t digits)
+{
 	const char hex_chars[] = "0123456789abcdef";
-	uint8_t n = (uint8_t) c;
-
-	hex_str[0] = hex_chars[n / 16];
-	hex_str[1] = hex_chars[n % 16];
-	hex_str[3] = '\0';
-
-	uart_print(hex_str);
+	if (digits == 3) uart_tx(hex_chars[(c >> 8) & 0x0F]);
+	uart_tx(hex_chars[(c >> 4) & 0x0F]);
+	uart_tx(hex_chars[c & 0x0F]);
 }
 
 uint8_t EEPROM_read(uint16_t addr)
@@ -57,12 +56,12 @@ void main()
 	for (uint16_t i = 0; i < 1024; i++) {
         if (i % 16 == 0) {
             uart_print("\r\n");
-			uart_print("000000");
-            print_hex_value(i);
+			uart_print("00000");
+            print_hex_value(i, 3);
             uart_print(": ");
         }
 
-        print_hex_value(EEPROM_read(i));
+        print_hex_value(EEPROM_read(i), 2);
 		if (i % 2 != 0)
         	uart_print(" ");
     }

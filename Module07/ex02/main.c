@@ -5,6 +5,10 @@
 #define UART_BAUDRATE 115200
 #define MYUBRR F_CPU/8/UART_BAUDRATE-1
 
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+
 #define START_BYTE	0xA5
 #define MID_BYTE	0xDE
 #define STOP_BYTE	0xEF
@@ -89,16 +93,11 @@ void ft_clear_buffer(char *buffer) {
     }
 }
 
-void print_hex_value(char c){
-	static char hex_str[4];
+void print_hex_value(uint16_t c, uint8_t digits){
 	const char hex_chars[] = "0123456789abcdef";
-	uint8_t n = (uint8_t) c;
-
-	hex_str[0] = hex_chars[n / 16];
-	hex_str[1] = hex_chars[n % 16];
-	hex_str[3] = '\0';
-
-	uart_print(hex_str);
+	if (digits == 3) uart_tx(hex_chars[(c >> 8) & 0x0F]);
+	uart_tx(hex_chars[(c >> 4) & 0x0F]);
+	uart_tx(hex_chars[c & 0x0F]);
 }
 
 unsigned char EEPROM_read(uint16_t addr){
@@ -129,17 +128,44 @@ uint8_t EEPROM_write(uint16_t addr, uint8_t data) {
 	return 1;
 }
 
+void print_row(char *buf) {
+	uart_print("| ");
+	for (uint8_t i = 0; i < 16; i++) {
+		if (buf[i] == 1)
+			uart_print("\x1b[32m[\x1b[0m");
+		else if (buf[i] == 2)
+			uart_print("\x1b[33m|\x1b[0m");
+		else if (buf[i] == 3)
+			uart_print("\x1b[31m]\x1b[0m");
+		else
+		uart_tx(buf[i]);
+	}
+}
+
 void EEPROM_hexdump() {
+	char buf[17];
+	unsigned char read;
 	for (uint16_t i = 0; i < 1024; i++) {
 		if (i % 16 == 0) {
+			if (i != 0) print_row(buf);
 			uart_print("\n\r");
-			print_hex_value((i >> 8) & 0xFF);
-			print_hex_value(i & 0xFF);
+			uart_print("00000");
+			print_hex_value(i, 3);
 			uart_print(": ");
 		}
-		print_hex_value(EEPROM_read(i));
+		read = EEPROM_read(i);
+		print_hex_value(read, 2);
+		if (read == START_BYTE)
+			buf[i % 16] = 1;
+		else if (read == MID_BYTE)
+			buf[i % 16] = 2;
+		else if (read == STOP_BYTE)
+			buf[i % 16] = 3;
+		else
+			buf[i % 16] = (read >= 32 && read <= 126) ? read : '.';
 		uart_print(" ");
 	}
+	print_row(buf);
 	uart_print("\n\r");
 }
 
@@ -213,10 +239,10 @@ char* read_value(uint16_t i) {
 
 int8_t valid_data(uint16_t i) {
     uint8_t j = 1;
-    char read;
+    uint8_t read;
 
     if (EEPROM_read(i) != START_BYTE)
-        return (uart_print("(error 0)"), 0);
+        return (0);
 
     // KEY: must have printable characters and end with MID_BYTE
     uint8_t has_print = 0;
@@ -226,13 +252,13 @@ int8_t valid_data(uint16_t i) {
             break;
 
         if (read < 32 || read > 126)
-            return (uart_print("(error 1)"), 0);
+            return (0);
 
         has_print = 1;
         j++;
     }
     if (!has_print)
-        return (uart_print("(error 4)"), 0);
+        return (0);
 
     j++; // move past MID_BYTE
 
@@ -244,34 +270,13 @@ int8_t valid_data(uint16_t i) {
             return j + 1;
 
         if (read < 32 || read > 126)
-            return (uart_print("(error 2)"), 0);
+            return (0);
 
         has_print = 1;
         j++;
     }
 	// did not find stop byte
-    return (uart_print("(error 3)"), 0);
-}
-
-
-void READ() {
-	char key[BUFF_SIZE + 1] = {0};
-
-	get_input(key, COMILLAS_ON);
-	
-	for (uint16_t i = 0; i < 1019; i++) {
-		if (EEPROM_read(i) == START_BYTE) {
-			if (valid_data(i)) // when valid data is 0
-				continue ;
-			if (!match_str(key, i))
-				continue ;
-			uart_print("\n\r\"");
-			uart_print(read_value(i));
-			uart_print("\"\n\r");
-			return ;
-		}
-	}
-	uart_print("\n\rempty\n\r");
+    return (0);
 }
 
 uint8_t check_space(uint16_t i, uint8_t space_needed) {
@@ -284,14 +289,34 @@ uint8_t check_space(uint16_t i, uint8_t space_needed) {
 			uint8_t skips = valid_data(i + j);
 			if (skips) {
 				j += skips;
-				continue ;
+				return j; // found valid data, return skips
 			}
-			else
-				return j;
+			// else, invalid data, continue checking
 		}
 		j++;
 	}
+
 	return 0; // enough space
+}
+
+void READ() {
+	char key[BUFF_SIZE + 1] = {0};
+
+	get_input(key, COMILLAS_ON);
+	
+	for (uint16_t i = 0; i < 1019; i++) {
+		if (EEPROM_read(i) == START_BYTE) {
+			if (!valid_data(i)) // when valid_data is 0 -> invalid data, continue search
+				continue ;
+			if (!match_str(key, i))
+				continue ;
+			uart_print("\n\r\"");
+			uart_print(read_value(i));
+			uart_print("\"\n\r");
+			return ;
+		}
+	}
+	uart_print("\n\rempty\n\r");
 }
 
 void WRITE() {
@@ -299,16 +324,15 @@ void WRITE() {
 	char data[BUFF_SIZE + 1] = {0};
 	uint8_t space_needed;
 	uint8_t skips;
-	uint8_t invalid_start = 0;
-	uint16_t i = 0;
 	uint16_t addr_of_existing;
 
 	get_input(key, COMILLAS_ON);
 	get_input(data, COMILLAS_ON);
 
+	// first, check if key already exists
 	for (uint16_t i = 0; i < 1019; i++) {
 		if (EEPROM_read(i) == START_BYTE) {
-			if (valid_data(i))
+			if (!valid_data(i))
 				continue ;
 			if (!match_str(key, i))
 				continue ;
@@ -316,7 +340,7 @@ void WRITE() {
 				uart_print("\n\ralready exists\n\r");
 				return ;
 			}
-			if (check_space(ft_strlen(key) + 1 + i, ft_strlen(data) + 1)) {
+			if (check_space(ft_strlen(key) + 1 + i, ft_strlen(data) + 2)) {
 				EEPROM_write(i, 0xFF); // invalidate existing entry
 				break ;
 			}
@@ -332,23 +356,18 @@ void WRITE() {
 
 	space_needed = 3 + ft_strlen(key) + ft_strlen(data);
 
+	uint16_t i = 0;
+	// find space for new entry
 	while (i < 1024) {
 		if (EEPROM_read(i) == START_BYTE) {
 			skips = valid_data(i);
-			if (skips == 0) { // debug
-				EEPROM_hexdump();
-				uart_print("[value skips 0]");
-				uart_tx(i + '0');
-			}
 			if (skips) {
 				i += skips;
 				continue ;
 			}
-			invalid_start = 1;
 		}
 
-		skips = check_space(i + invalid_start, space_needed - invalid_start);
-		invalid_start = 0;
+		skips = check_space(i, space_needed);
 		if (skips) {
 			i += skips;
 			continue ;
@@ -371,6 +390,25 @@ void WRITE() {
 	uart_print("\n\rdone\n\r");
 }
 
+void FORGET() {
+	char key[BUFF_SIZE + 1] = {0};
+
+	get_input(key, COMILLAS_ON);
+	
+	for (uint16_t i = 0; i < 1019; i++) {
+		if (EEPROM_read(i) == START_BYTE) {
+			if (!valid_data(i)) // when valid_data is 0 -> invalid data, continue
+				continue;
+			if (!match_str(key, i))
+				continue;
+			EEPROM_write(i, 0xFF); // invalidate entry
+			uart_print("\n\rpair forgotten\n\r");
+			return ;
+		}
+	}
+	uart_print("\n\rnot found\n\r");
+}
+
 void execute_command(char *buff) {
 	if (ft_strcmp(buff, "READ") == 0)
 		READ();
@@ -378,6 +416,14 @@ void execute_command(char *buff) {
 		WRITE();
 	else if (ft_strcmp(buff, "PRINT") == 0)
 		EEPROM_hexdump();
+	else if (ft_strcmp(buff, "FORGET") == 0)
+		FORGET();
+	else if (ft_strcmp(buff, "MW") == 0) {
+		EEPROM_write(0x09, 0xFF);
+		uart_print("\n\raddress: ");
+		print_hex_value(0x09, 2);
+		uart_print(" set to 0xFF\n\r");
+	}
 	else
 		uart_print("\n\rERR: UNKNOWN COMMAND.\n\r");
 }
