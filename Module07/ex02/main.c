@@ -216,7 +216,7 @@ int8_t valid_data(uint16_t i) {
     char read;
 
     if (EEPROM_read(i) != START_BYTE)
-        return 0;
+        return (uart_print("(error 0)"), 0);
 
     // KEY: must have printable characters and end with MID_BYTE
     uint8_t has_print = 0;
@@ -226,13 +226,13 @@ int8_t valid_data(uint16_t i) {
             break;
 
         if (read < 32 || read > 126)
-            return 0;
+            return (uart_print("(error 1)"), 0);
 
         has_print = 1;
         j++;
     }
     if (!has_print)
-        return 0;
+        return (uart_print("(error 4)"), 0);
 
     j++; // move past MID_BYTE
 
@@ -244,12 +244,13 @@ int8_t valid_data(uint16_t i) {
             return j + 1;
 
         if (read < 32 || read > 126)
-            return 0;
+            return (uart_print("(error 2)"), 0);
 
         has_print = 1;
         j++;
     }
-    return 0;
+	// did not find stop byte
+    return (uart_print("(error 3)"), 0);
 }
 
 
@@ -334,7 +335,11 @@ void WRITE() {
 	while (i < 1024) {
 		if (EEPROM_read(i) == START_BYTE) {
 			skips = valid_data(i);
-			if (skips == 0) uart_print("[value skips 0]");
+			if (skips == 0) { // debug
+				EEPROM_hexdump();
+				uart_print("[value skips 0]");
+				uart_tx(i + '0');
+			}
 			if (skips) {
 				i += skips;
 				continue ;
