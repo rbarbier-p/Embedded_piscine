@@ -1,0 +1,9 @@
+#ifndef ADC_LIB_H
+#define ADC_LIB_H
+
+#include <avr/io.h>
+
+void ADC_int(void);
+uint8_t ADC_read_RV1(void);
+
+#endif
