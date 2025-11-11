@@ -6,6 +6,18 @@ uint8_t g_current_color;
 
 __attribute__((signal)) void INT0_vect(void)
 {
+  static uint8_t was_pressed = 0;
+
+  if (!was_pressed) {
+    if (g_current_color> 1)
+      g_current_color= 0;
+    else
+      g_current_color++;
+  } 
+  
+  _delay_ms(5);
+  was_pressed = !was_pressed;
+  EIFR |= (1 << INTF0);
 }
 
 __attribute__((signal)) void PCINT2_vect(void)
@@ -19,10 +31,12 @@ __attribute__((signal)) void PCINT2_vect(void)
       g_current_led++;
   } 
   
-  
+  _delay_ms(5);
+  was_pressed = !was_pressed;
+  PCIFR |= (1 << PCIF2);
 }
 
-int main(void)
+void main(void)
 {
   EIMSK |= (1 << INT0); // (PD2)
   EICRA |= (1 << ISC00);// any change
@@ -30,9 +44,11 @@ int main(void)
   PCICR |= (1 << PCIE2); //portd
   PCMSK2 |= (1 << PCINT20); // (PD4)
 
+  sei();
+
 	SPI_master_init();
   ADC_init();
-  uint8_t rgbs[3][3];
+  uint8_t rgbs[3][3] = {0};
 
   uint8_t color;
   while (1) {
@@ -44,6 +60,4 @@ int main(void)
     SPI_APA102_frame(rgbs[2][0], rgbs[2][1], rgbs[2][2], 0xFF);
     SPI_APA102_stop(); 
   }
-
-	return 0;
 }

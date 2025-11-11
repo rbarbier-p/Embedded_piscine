@@ -7,9 +7,12 @@ PROGRAMMER = arduino
 PORT = /dev/ttyUSB0
 BAUD = 115200
 
-CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Os 
+CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Os -Iinc
 
-SRC = rgb.c 
+SRC_DIR = src
+
+SRC_FILES = main.c SPI_lib.c
+SRC = $(addprefix $(SRC_DIR)/, $(SRC_FILES))
 BIN = program.bin
 HEX = program.hex
 

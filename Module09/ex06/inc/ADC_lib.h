@@ -4,6 +4,6 @@
 #include <avr/io.h>
 
 void ADC_init(void);
-uint8_t ADC_read_RV1(void);
+uint16_t ADC_read_RV1(void);
 
 #endif

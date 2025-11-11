@@ -8,8 +8,8 @@ PORT = /dev/ttyUSB0
 BAUD = 115200
 
 SRC = main.c SPI_lib.c
-BIN = main.bin
-HEX = main.hex
+BIN = program.bin
+HEX = program.hex
 
 all: hex flash
 
